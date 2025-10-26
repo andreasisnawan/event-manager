@@ -21,17 +21,17 @@ services:
     depends_on:
       - db
 
-  frontend:
-    build: ./frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
-    depends_on:
-      - backend
+  # frontend:
+  #   build: ./frontend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "5173:5173"
+  #   environment:
+  #     - REACT_APP_API_URL=http://localhost:5173
+  #   depends_on:
+  #     - backend
 
   db:
     image: postgres:16.6-alpine3.20
