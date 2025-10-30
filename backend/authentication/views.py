@@ -4,7 +4,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import UserLoginSerializer, UserRegistrationSerializer
+from .serializers import (UserListSerializer, UserLoginSerializer,
+                          UserRegistrationSerializer)
 
 User = get_user_model()
 
@@ -52,3 +53,27 @@ class LoginView(APIView):
                 'error': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class UserListView(APIView):
+    def get(self, request):
+        # Only admin users can list all users
+        if not request.user.role == 'admin':
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        
+        users = User.objects.all()
+        serializer = UserListSerializer(users, many=True)
+        return Response(serializer.data)
+
+class UserDetailView(APIView):
+    def get(self, request, pk):
+        # Admin can view any user, others can only view themselves
+        if not request.user.role == 'admin' and str(request.user.id) != pk:
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = UserListSerializer(user)
+        return Response(serializer.data)

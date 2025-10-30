@@ -8,16 +8,8 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
-    environment:
-      - DEBUG=1
-      - SECRET_KEY=your-secret-key-here
-      - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
-      - SQL_ENGINE=django.db.backends.postgresql
-      - SQL_DATABASE=event_manager
-      - SQL_USER=event_manager
-      - SQL_PASSWORD=event_manager_password
-      - SQL_HOST=db
-      - SQL_PORT=5432
+    env_file:
+      - ./backend/.env
     depends_on:
       - db
 
