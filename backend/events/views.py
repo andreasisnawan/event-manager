@@ -20,7 +20,7 @@ class EventViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        base_queryset = Event.objects.all()
+        base_queryset = Event.objects.select_related('venue').all()
 
         # Admin and organizers can see all events
         if user.is_authenticated and user.role in [User.ADMIN, User.ORGANIZER]:

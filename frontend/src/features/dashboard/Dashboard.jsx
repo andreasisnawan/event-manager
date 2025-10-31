@@ -57,6 +57,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedSessionDetails, setSelectedSessionDetails] = useState(null);
+  const [eventDetailsModalVisible, setEventDetailsModalVisible] =
+    useState(false);
+  const [selectedEventDetails, setSelectedEventDetails] = useState(null);
 
   // Fetch data based on selected menu
   useEffect(() => {
@@ -194,6 +197,11 @@ const Dashboard = () => {
       fetchSpeakers();
     }
 
+    // Fetch venues if creating an event and venues aren't loaded
+    if (activeEventTab === "events" && venues.length === 0) {
+      fetchVenues();
+    }
+
     setModalVisible(true);
   };
 
@@ -217,6 +225,22 @@ const Dashboard = () => {
       // Fetch speakers if not loaded
       if (speakers.length === 0) {
         fetchSpeakers();
+      }
+    } else if (activeEventTab === "events") {
+      // Format event data for the form
+      const formattedRecord = {
+        ...record,
+        dateRange:
+          record.start_time && record.end_time
+            ? [dayjs(record.start_time), dayjs(record.end_time)]
+            : null,
+        venue_id: record.venue,
+      };
+      form.setFieldsValue(formattedRecord);
+
+      // Fetch venues if not loaded
+      if (venues.length === 0) {
+        fetchVenues();
       }
     } else {
       form.setFieldsValue(record);
@@ -250,6 +274,10 @@ const Dashboard = () => {
             await sessionsAPI.delete(selectedEventId, record.id);
             message.success("Session deleted successfully");
             fetchSessions(selectedEventId);
+          } else if (activeEventTab === "events") {
+            await eventsAPI.delete(record.id);
+            message.success("Event deleted successfully");
+            fetchEvents();
           } else {
             // Add API calls for other resources
             message.success("Item deleted successfully");
@@ -306,6 +334,29 @@ const Dashboard = () => {
         }
 
         fetchVenues();
+      } else if (activeEventTab === "events") {
+        // Handle event creation/update
+        const eventData = {
+          title: values.title,
+          slug: values.slug,
+          description: values.description || "",
+          start_time: values.dateRange[0].format("YYYY-MM-DDTHH:mm:ss"),
+          end_time: values.dateRange[1].format("YYYY-MM-DDTHH:mm:ss"),
+          venue_id: values.venue_id,
+          capacity: parseInt(values.capacity, 10),
+          status: values.status,
+          metadata: values.metadata || {},
+        };
+
+        if (modalType === "create") {
+          await eventsAPI.create(eventData);
+          message.success("Event created successfully");
+        } else {
+          await eventsAPI.update(selectedRecord.id, eventData);
+          message.success("Event updated successfully");
+        }
+
+        fetchEvents();
       } else if (activeEventTab === "tracks" && selectedEventId) {
         // Handle track creation/update
         const trackData = {
@@ -376,56 +427,88 @@ const Dashboard = () => {
       key: "title",
     },
     {
-      title: "Description",
-      dataIndex: "description",
-      key: "description",
-      ellipsis: true,
-    },
-    {
       title: "Date Range",
-      dataIndex: "startDate",
+      dataIndex: "start_time",
       key: "dateRange",
-      render: (_, record) => (
-        <span>
-          {record.startDate} to {record.endDate}
-        </span>
-      ),
+      render: (_, record) => {
+        const startDate = dayjs(record.start_time).format("MMM D, YYYY");
+        const endDate = dayjs(record.end_time).format("MMM D, YYYY");
+        return (
+          <span>
+            {startDate} - {endDate}
+          </span>
+        );
+      },
     },
     {
       title: "Venue",
-      dataIndex: "venue",
+      dataIndex: "venue_details",
       key: "venue",
+      render: (venue) => venue?.name || "-",
+    },
+    {
+      title: "Capacity",
+      dataIndex: "capacity",
+      key: "capacity",
+      render: (capacity, record) => (
+        <span>
+          {record.registered_count || 0} / {capacity}
+        </span>
+      ),
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      render: (status) => (
-        <Tag color={status === "upcoming" ? "green" : "blue"}>
-          {status.toUpperCase()}
-        </Tag>
-      ),
+      render: (status) => {
+        const statusColors = {
+          draft: "default",
+          published: "green",
+          cancelled: "red",
+        };
+        return (
+          <Tag color={statusColors[status] || "blue"}>
+            {status.toUpperCase()}
+          </Tag>
+        );
+      },
     },
     {
       title: "Actions",
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          />
-          <Button
-            type="text"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          />
+          <Tooltip title="View Details">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewEventDetails(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Edit">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Delete">
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record)}
+            />
+          </Tooltip>
         </Space>
       ),
     },
   ];
+
+  const handleViewEventDetails = (record) => {
+    setSelectedEventDetails(record);
+    setEventDetailsModalVisible(true);
+  };
 
   const handleViewDetails = (record) => {
     setSelectedSessionDetails(record);
@@ -708,16 +791,13 @@ const Dashboard = () => {
                 { required: true, message: "Please enter the event title" },
               ]}
             >
-              <Input />
+              <Input placeholder="Annual Tech Conference 2025" />
             </Form.Item>
-            <Form.Item
-              name="description"
-              label="Description"
-              rules={[
-                { required: true, message: "Please enter a description" },
-              ]}
-            >
-              <Input.TextArea />
+            <Form.Item name="description" label="Description">
+              <Input.TextArea
+                rows={3}
+                placeholder="Brief description of the event..."
+              />
             </Form.Item>
             <Form.Item
               name="dateRange"
@@ -726,14 +806,51 @@ const Dashboard = () => {
                 { required: true, message: "Please select the date range" },
               ]}
             >
-              <RangePicker />
+              <RangePicker
+                showTime
+                format="YYYY-MM-DD HH:mm"
+                style={{ width: "100%" }}
+              />
             </Form.Item>
             <Form.Item
-              name="venue"
+              name="venue_id"
               label="Venue"
-              rules={[{ required: true, message: "Please enter the venue" }]}
+              rules={[{ required: true, message: "Please select a venue" }]}
             >
-              <Input />
+              <Select
+                placeholder="Select a venue"
+                showSearch
+                optionFilterProp="children"
+                loading={venues.length === 0}
+                filterOption={(input, option) =>
+                  option.children.toLowerCase().indexOf(input.toLowerCase()) >=
+                  0
+                }
+              >
+                {venues.map((venue) => (
+                  <Select.Option key={venue.id} value={venue.id}>
+                    {venue.name} {venue.city ? `- ${venue.city}` : ""}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item
+              name="capacity"
+              label="Event Capacity"
+              rules={[{ required: true, message: "Please enter the capacity" }]}
+            >
+              <Input
+                type="number"
+                min={1}
+                placeholder="Maximum number of attendees"
+              />
+            </Form.Item>
+            <Form.Item
+              name="slug"
+              label="Slug"
+              rules={[{ required: true, message: "Please enter a slug" }]}
+            >
+              <Input placeholder="annual-tech-conference-2025" />
             </Form.Item>
             <Form.Item
               name="status"
@@ -741,9 +858,9 @@ const Dashboard = () => {
               rules={[{ required: true, message: "Please select the status" }]}
             >
               <Select>
-                <Select.Option value="upcoming">Upcoming</Select.Option>
-                <Select.Option value="ongoing">Ongoing</Select.Option>
-                <Select.Option value="completed">Completed</Select.Option>
+                <Select.Option value="draft">Draft</Select.Option>
+                <Select.Option value="published">Published</Select.Option>
+                <Select.Option value="cancelled">Cancelled</Select.Option>
               </Select>
             </Form.Item>
           </>
@@ -1155,6 +1272,138 @@ const Dashboard = () => {
                   <Descriptions.Item label="Event">
                     {events.find((e) => e.id === selectedEventId)?.title || "-"}
                   </Descriptions.Item>
+                </Descriptions>
+              )}
+            </Modal>
+
+            <Modal
+              title="Event Details"
+              open={eventDetailsModalVisible}
+              onCancel={() => {
+                setEventDetailsModalVisible(false);
+                setSelectedEventDetails(null);
+              }}
+              footer={[
+                <Button
+                  key="edit"
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setEventDetailsModalVisible(false);
+                    handleEdit(selectedEventDetails);
+                  }}
+                >
+                  Edit
+                </Button>,
+                <Button
+                  key="close"
+                  onClick={() => {
+                    setEventDetailsModalVisible(false);
+                    setSelectedEventDetails(null);
+                  }}
+                >
+                  Close
+                </Button>,
+              ]}
+              width={700}
+            >
+              {selectedEventDetails && (
+                <Descriptions bordered column={1}>
+                  <Descriptions.Item label="Title">
+                    {selectedEventDetails.title}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Description">
+                    {selectedEventDetails.description || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Start Date & Time">
+                    {dayjs(selectedEventDetails.start_time).format(
+                      "MMMM D, YYYY [at] h:mm A"
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="End Date & Time">
+                    {dayjs(selectedEventDetails.end_time).format(
+                      "MMMM D, YYYY [at] h:mm A"
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Duration">
+                    {(() => {
+                      const start = dayjs(selectedEventDetails.start_time);
+                      const end = dayjs(selectedEventDetails.end_time);
+                      const days = end.diff(start, "day");
+                      const hours = end.diff(start, "hour") % 24;
+
+                      if (days > 0) {
+                        return `${days} day${days > 1 ? "s" : ""} ${
+                          hours > 0 ? `${hours}h` : ""
+                        }`;
+                      }
+                      return `${hours} hour${hours > 1 ? "s" : ""}`;
+                    })()}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Venue">
+                    {selectedEventDetails.venue_details ? (
+                      <Space direction="vertical" size="small">
+                        <strong>
+                          {selectedEventDetails.venue_details.name}
+                        </strong>
+                        {selectedEventDetails.venue_details.address && (
+                          <span>
+                            {selectedEventDetails.venue_details.address}
+                          </span>
+                        )}
+                        {selectedEventDetails.venue_details.city && (
+                          <span>{selectedEventDetails.venue_details.city}</span>
+                        )}
+                        {selectedEventDetails.venue_details.capacity && (
+                          <span>
+                            Capacity:{" "}
+                            {selectedEventDetails.venue_details.capacity.toLocaleString()}{" "}
+                            people
+                          </span>
+                        )}
+                      </Space>
+                    ) : (
+                      "-"
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Event Capacity">
+                    {selectedEventDetails.capacity?.toLocaleString()} attendees
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Registrations">
+                    {selectedEventDetails.registered_count || 0} /{" "}
+                    {selectedEventDetails.capacity} (
+                    {selectedEventDetails.capacity -
+                      (selectedEventDetails.registered_count || 0)}{" "}
+                    remaining)
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Status">
+                    <Tag
+                      color={
+                        selectedEventDetails.status === "published"
+                          ? "green"
+                          : selectedEventDetails.status === "draft"
+                          ? "default"
+                          : "red"
+                      }
+                    >
+                      {selectedEventDetails.status?.toUpperCase()}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Slug">
+                    {selectedEventDetails.slug}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Created At">
+                    {dayjs(selectedEventDetails.created_at).format(
+                      "MMMM D, YYYY [at] h:mm A"
+                    )}
+                  </Descriptions.Item>
+                  {selectedEventDetails.updated_at && (
+                    <Descriptions.Item label="Last Updated">
+                      {dayjs(selectedEventDetails.updated_at).format(
+                        "MMMM D, YYYY [at] h:mm A"
+                      )}
+                    </Descriptions.Item>
+                  )}
                 </Descriptions>
               )}
             </Modal>

@@ -13,10 +13,23 @@ class VenueSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class EventSerializer(serializers.ModelSerializer):
+    venue_details = serializers.SerializerMethodField(read_only=True)
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True,
+        required=False
+    )
+    
     class Meta:
         model = Event
         read_only_fields = ('registered_count', 'created_at', 'updated_at')
         fields = '__all__'
+    
+    def get_venue_details(self, obj):
+        if obj.venue:
+            return VenueSerializer(obj.venue).data
+        return None
 
     def create(self, validated_data):
         request = self.context.get('request')
