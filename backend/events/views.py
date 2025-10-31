@@ -44,6 +44,19 @@ class EventViewSet(viewsets.ModelViewSet):
             'registered_count': event.registered_count,
             'remaining': max(event.capacity - event.registered_count, 0)
         })
+    
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def recommendations(self, request):
+        """Return the nearest 4 upcoming published events"""
+        from django.utils import timezone
+        
+        upcoming_events = Event.objects.select_related('venue').filter(
+            status=Event.STATUS_PUBLISHED,
+            start_time__gte=timezone.now()
+        ).order_by('start_time')[:4]
+        
+        serializer = self.get_serializer(upcoming_events, many=True)
+        return Response(serializer.data)
 
 class TrackViewSet(viewsets.ModelViewSet):
     serializer_class = TrackSerializer

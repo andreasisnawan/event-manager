@@ -82,15 +82,7 @@ const MainLayout = () => {
           </Button>
         </Space>
       </Header>
-      <Content
-        style={{
-          margin: "24px",
-          padding: 24,
-          background: "#fff",
-          borderRadius: 8,
-          minHeight: 280,
-        }}
-      >
+      <Content className="pb-10">
         <Outlet />
       </Content>
     </Layout>

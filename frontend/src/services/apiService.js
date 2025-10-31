@@ -79,6 +79,7 @@ export const eventsAPI = {
   update: (id, data) => apiClient.put(`/events/${id}`, data),
   partialUpdate: (id, data) => apiClient.patch(`/events/${id}`, data),
   delete: (id) => apiClient.delete(`/events/${id}`),
+  getRecommendations: () => apiClient.get("/events/recommendations"),
 };
 
 // Sessions API
