@@ -44,11 +44,29 @@ class TrackSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['event']
 
+class SpeakerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Speaker
+        fields = '__all__'
+
 class SessionSerializer(serializers.ModelSerializer):
+    speakers = serializers.SerializerMethodField(read_only=True)
+    speakers_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Speaker.objects.all(),
+        source='speakers',
+        write_only=True,
+        required=False
+    )
+    
     class Meta:
         model = Session
         fields = '__all__'
         read_only_fields = ['event']
+
+    def get_speakers(self, obj):
+        # Return full speaker objects for read operations
+        return SpeakerSerializer(obj.speakers.all(), many=True).data
 
     def validate(self, data):
         # ensure session inside event and start < end
@@ -62,11 +80,6 @@ class SessionSerializer(serializers.ModelSerializer):
             if start < event.start_time or end > event.end_time:
                 raise serializers.ValidationError("Session times must be inside parent event times")
         return data
-
-class SpeakerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Speaker
-        fields = '__all__'
 
 class VenueSerializer(serializers.ModelSerializer):
     class Meta:

@@ -3,12 +3,15 @@ import {
   CalendarOutlined,
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
   PlusOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import {
+  Avatar,
   Button,
   DatePicker,
+  Descriptions,
   Form,
   Input,
   Layout,
@@ -20,11 +23,14 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
+import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import {
   eventsAPI,
+  sessionsAPI,
   speakersAPI,
   tracksAPI,
   venuesAPI,
@@ -46,8 +52,11 @@ const Dashboard = () => {
   const [cityChoices, setCityChoices] = useState([]);
   const [events, setEvents] = useState([]);
   const [tracks, setTracks] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedSessionDetails, setSelectedSessionDetails] = useState(null);
 
   // Fetch data based on selected menu
   useEffect(() => {
@@ -59,8 +68,8 @@ const Dashboard = () => {
     } else if (selectedMenu === "events") {
       if (activeEventTab === "events") {
         fetchEvents();
-      } else if (activeEventTab === "tracks") {
-        fetchEvents(); // Need events for tracks
+      } else if (activeEventTab === "tracks" || activeEventTab === "sessions") {
+        fetchEvents(); // Need events for tracks and sessions
       }
     }
   }, [selectedMenu, activeEventTab]);
@@ -150,32 +159,69 @@ const Dashboard = () => {
     }
   }, [selectedEventId, activeEventTab]);
 
-  // Mock data - replace with API calls
+  const fetchSessions = async (eventId) => {
+    if (!eventId) return;
 
-  const sessions = [
-    {
-      id: 1,
-      eventId: 1,
-      title: "Keynote Speech",
-      description: "Opening keynote",
-      startTime: "2025-11-15 09:00",
-      endTime: "2025-11-15 10:30",
-      trackId: 1,
-      speaker: "John Doe",
-    },
-  ];
+    setLoading(true);
+    try {
+      const response = await sessionsAPI.getAll(eventId);
+      setSessions(response.data);
+    } catch (error) {
+      message.error(
+        "Failed to fetch sessions: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch sessions when event is selected and sessions tab is active
+  useEffect(() => {
+    if (activeEventTab === "sessions" && selectedEventId) {
+      fetchSessions(selectedEventId);
+      fetchTracks(selectedEventId); // Also fetch tracks for the dropdown
+    }
+  }, [selectedEventId, activeEventTab]);
 
   const handleCreate = () => {
     setModalType("create");
     setSelectedRecord(null);
     form.resetFields();
+
+    // Fetch speakers if creating a session and speakers aren't loaded
+    if (activeEventTab === "sessions" && speakers.length === 0) {
+      fetchSpeakers();
+    }
+
     setModalVisible(true);
   };
 
   const handleEdit = (record) => {
     setModalType("edit");
     setSelectedRecord(record);
-    form.setFieldsValue(record);
+
+    // For sessions, we need to format the data properly for the form
+    if (activeEventTab === "sessions") {
+      // Format dates for DatePicker
+      const formattedRecord = {
+        ...record,
+        timeRange:
+          record.start_time && record.end_time
+            ? [dayjs(record.start_time), dayjs(record.end_time)]
+            : null,
+        speaker_ids: record.speakers?.map((s) => s.id) || [],
+      };
+      form.setFieldsValue(formattedRecord);
+
+      // Fetch speakers if not loaded
+      if (speakers.length === 0) {
+        fetchSpeakers();
+      }
+    } else {
+      form.setFieldsValue(record);
+    }
+
     setModalVisible(true);
   };
 
@@ -200,6 +246,10 @@ const Dashboard = () => {
             await tracksAPI.delete(selectedEventId, record.id);
             message.success("Track deleted successfully");
             fetchTracks(selectedEventId);
+          } else if (activeEventTab === "sessions" && selectedEventId) {
+            await sessionsAPI.delete(selectedEventId, record.id);
+            message.success("Session deleted successfully");
+            fetchSessions(selectedEventId);
           } else {
             // Add API calls for other resources
             message.success("Item deleted successfully");
@@ -272,6 +322,32 @@ const Dashboard = () => {
         }
 
         fetchTracks(selectedEventId);
+      } else if (activeEventTab === "sessions" && selectedEventId) {
+        // Handle session creation/update
+        const sessionData = {
+          title: values.title,
+          description: values.description || "",
+          start_time: values.timeRange[0].format("YYYY-MM-DDTHH:mm:ss"),
+          end_time: values.timeRange[1].format("YYYY-MM-DDTHH:mm:ss"),
+          track: values.track || null,
+          speakers_ids: values.speaker_ids || [],
+          room: values.room || "",
+          metadata: values.metadata || {},
+        };
+
+        if (modalType === "create") {
+          await sessionsAPI.create(selectedEventId, sessionData);
+          message.success("Session created successfully");
+        } else {
+          await sessionsAPI.update(
+            selectedEventId,
+            selectedRecord.id,
+            sessionData
+          );
+          message.success("Session updated successfully");
+        }
+
+        fetchSessions(selectedEventId);
       } else {
         // Handle other resources
         console.log("Form values:", values);
@@ -351,6 +427,11 @@ const Dashboard = () => {
     },
   ];
 
+  const handleViewDetails = (record) => {
+    setSelectedSessionDetails(record);
+    setDetailsModalVisible(true);
+  };
+
   const sessionsColumns = [
     {
       title: "Title",
@@ -358,51 +439,96 @@ const Dashboard = () => {
       key: "title",
     },
     {
-      title: "Description",
-      dataIndex: "description",
-      key: "description",
-      ellipsis: true,
-    },
-    {
       title: "Time",
-      dataIndex: "startTime",
+      dataIndex: "start_time",
       key: "time",
-      render: (_, record) => (
-        <span>
-          {record.startTime} - {record.endTime}
-        </span>
-      ),
+      render: (_, record) => {
+        const startTime = dayjs(record.start_time).format("MMM D, YYYY HH:mm");
+        const endTime = dayjs(record.end_time).format("HH:mm");
+        return (
+          <span>
+            {startTime} - {endTime}
+          </span>
+        );
+      },
     },
     {
-      title: "Speaker",
-      dataIndex: "speaker",
-      key: "speaker",
+      title: "Speakers",
+      dataIndex: "speakers",
+      key: "speakers",
+      render: (speakers) => {
+        if (!speakers || speakers.length === 0) return "-";
+
+        return (
+          <Avatar.Group
+            max={{
+              count: 3,
+              style: { color: "#f56a00", backgroundColor: "#fde3cf" },
+            }}
+          >
+            {speakers.map((speaker) => (
+              <Tooltip key={speaker.id} title={speaker.name || "Unknown"}>
+                {speaker.avatar_url ? (
+                  <Avatar
+                    src={speaker.avatar_url}
+                    style={{ cursor: "default" }}
+                  />
+                ) : (
+                  <Avatar
+                    style={{ backgroundColor: "#87d068", cursor: "default" }}
+                  >
+                    {speaker.name ? speaker.name.charAt(0).toUpperCase() : "?"}
+                  </Avatar>
+                )}
+              </Tooltip>
+            ))}
+          </Avatar.Group>
+        );
+      },
     },
     {
       title: "Track",
-      dataIndex: "trackId",
+      dataIndex: "track",
       key: "track",
       render: (trackId) => {
+        if (!trackId) return "-";
         const track = tracks.find((t) => t.id === trackId);
         return track ? track.name : "-";
       },
+    },
+    {
+      title: "Room",
+      dataIndex: "room",
+      key: "room",
+      render: (room) => room || "-",
     },
     {
       title: "Actions",
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          />
-          <Button
-            type="text"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          />
+          <Tooltip title="View Details">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetails(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Edit">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Delete">
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record)}
+            />
+          </Tooltip>
         </Space>
       ),
     },
@@ -633,16 +759,13 @@ const Dashboard = () => {
                 { required: true, message: "Please enter the session title" },
               ]}
             >
-              <Input />
+              <Input placeholder="Introduction to AI" />
             </Form.Item>
-            <Form.Item
-              name="description"
-              label="Description"
-              rules={[
-                { required: true, message: "Please enter a description" },
-              ]}
-            >
-              <Input.TextArea />
+            <Form.Item name="description" label="Description">
+              <Input.TextArea
+                rows={3}
+                placeholder="Brief description of the session..."
+              />
             </Form.Item>
             <Form.Item
               name="timeRange"
@@ -651,29 +774,46 @@ const Dashboard = () => {
                 { required: true, message: "Please select the time range" },
               ]}
             >
-              <RangePicker showTime />
+              <RangePicker
+                showTime
+                format="YYYY-MM-DD HH:mm"
+                style={{ width: "100%" }}
+              />
             </Form.Item>
-            <Form.Item
-              name="speaker"
-              label="Speaker"
-              rules={[
-                { required: true, message: "Please enter the speaker name" },
-              ]}
-            >
-              <Input />
+            <Form.Item name="speaker_ids" label="Speakers">
+              <Select
+                mode="multiple"
+                placeholder="Select speakers"
+                loading={speakers.length === 0}
+                showSearch
+                optionFilterProp="children"
+                filterOption={(input, option) =>
+                  option.children.toLowerCase().indexOf(input.toLowerCase()) >=
+                  0
+                }
+              >
+                {speakers.map((speaker) => (
+                  <Select.Option key={speaker.id} value={speaker.id}>
+                    {speaker.name}
+                  </Select.Option>
+                ))}
+              </Select>
             </Form.Item>
-            <Form.Item
-              name="trackId"
-              label="Track"
-              rules={[{ required: true, message: "Please select a track" }]}
-            >
-              <Select>
+            <Form.Item name="track" label="Track">
+              <Select
+                placeholder="Select a track (optional)"
+                allowClear
+                loading={tracks.length === 0}
+              >
                 {tracks.map((track) => (
                   <Select.Option key={track.id} value={track.id}>
                     {track.name}
                   </Select.Option>
                 ))}
               </Select>
+            </Form.Item>
+            <Form.Item name="room" label="Room">
+              <Input placeholder="Room 101" />
             </Form.Item>
           </>
         );
@@ -847,32 +987,38 @@ const Dashboard = () => {
                   </Title>
                 )}
                 <Space>
-                  {activeEventTab === "tracks" && selectedMenu === "events" && (
-                    <Select
-                      style={{ width: 300 }}
-                      placeholder="Select an event"
-                      value={selectedEventId}
-                      onChange={setSelectedEventId}
-                      showSearch
-                      optionFilterProp="children"
-                      filterOption={(input, option) =>
-                        option.children
-                          .toLowerCase()
-                          .indexOf(input.toLowerCase()) >= 0
-                      }
-                    >
-                      {events.map((event) => (
-                        <Select.Option key={event.id} value={event.id}>
-                          {event.title}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  )}
+                  {(activeEventTab === "tracks" ||
+                    activeEventTab === "sessions") &&
+                    selectedMenu === "events" && (
+                      <Select
+                        style={{ width: 300 }}
+                        placeholder="Select an event"
+                        value={selectedEventId}
+                        onChange={setSelectedEventId}
+                        showSearch
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                          option.children
+                            .toLowerCase()
+                            .indexOf(input.toLowerCase()) >= 0
+                        }
+                      >
+                        {events.map((event) => (
+                          <Select.Option key={event.id} value={event.id}>
+                            {event.title}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    )}
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={handleCreate}
-                    disabled={activeEventTab === "tracks" && !selectedEventId}
+                    disabled={
+                      (activeEventTab === "tracks" ||
+                        activeEventTab === "sessions") &&
+                      !selectedEventId
+                    }
                   >
                     Add New
                   </Button>
@@ -910,6 +1056,107 @@ const Dashboard = () => {
               <Form form={form} layout="vertical">
                 {getModalForm()}
               </Form>
+            </Modal>
+
+            <Modal
+              title="Session Details"
+              open={detailsModalVisible}
+              onCancel={() => {
+                setDetailsModalVisible(false);
+                setSelectedSessionDetails(null);
+              }}
+              footer={[
+                <Button
+                  key="edit"
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setDetailsModalVisible(false);
+                    handleEdit(selectedSessionDetails);
+                  }}
+                >
+                  Edit
+                </Button>,
+                <Button
+                  key="close"
+                  onClick={() => {
+                    setDetailsModalVisible(false);
+                    setSelectedSessionDetails(null);
+                  }}
+                >
+                  Close
+                </Button>,
+              ]}
+              width={700}
+            >
+              {selectedSessionDetails && (
+                <Descriptions bordered column={1}>
+                  <Descriptions.Item label="Title">
+                    {selectedSessionDetails.title}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Description">
+                    {selectedSessionDetails.description || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Start Time">
+                    {dayjs(selectedSessionDetails.start_time).format(
+                      "MMMM D, YYYY [at] h:mm A"
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="End Time">
+                    {dayjs(selectedSessionDetails.end_time).format(
+                      "MMMM D, YYYY [at] h:mm A"
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Duration">
+                    {(() => {
+                      const start = dayjs(selectedSessionDetails.start_time);
+                      const end = dayjs(selectedSessionDetails.end_time);
+                      const duration = end.diff(start, "minute");
+                      const hours = Math.floor(duration / 60);
+                      const minutes = duration % 60;
+                      return hours > 0
+                        ? `${hours}h ${minutes}m`
+                        : `${minutes}m`;
+                    })()}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Speakers">
+                    {selectedSessionDetails.speakers &&
+                    selectedSessionDetails.speakers.length > 0 ? (
+                      <Space direction="vertical" size="small">
+                        {selectedSessionDetails.speakers.map((speaker) => (
+                          <Space key={speaker.id}>
+                            {speaker.avatar_url ? (
+                              <Avatar src={speaker.avatar_url} />
+                            ) : (
+                              <Avatar style={{ backgroundColor: "#87d068" }}>
+                                {speaker.name
+                                  ? speaker.name.charAt(0).toUpperCase()
+                                  : "?"}
+                              </Avatar>
+                            )}
+                            <span>{speaker.name || "Unknown"}</span>
+                          </Space>
+                        ))}
+                      </Space>
+                    ) : (
+                      "-"
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Track">
+                    {selectedSessionDetails.track
+                      ? tracks.find(
+                          (t) => t.id === selectedSessionDetails.track
+                        )?.name || "-"
+                      : "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Room">
+                    {selectedSessionDetails.room || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Event">
+                    {events.find((e) => e.id === selectedEventId)?.title || "-"}
+                  </Descriptions.Item>
+                </Descriptions>
+              )}
             </Modal>
           </Space>
         </Content>

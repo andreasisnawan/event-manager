@@ -85,7 +85,7 @@ class SessionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         event_id = self.kwargs.get('event_pk')
-        return Session.objects.filter(event_id=event_id)
+        return Session.objects.filter(event_id=event_id).prefetch_related('speakers')
 
     def perform_create(self, serializer):
         # extra validation for overlaps happens in serializer.clean or DB constraint
