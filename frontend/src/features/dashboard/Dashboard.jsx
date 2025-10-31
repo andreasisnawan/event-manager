@@ -23,7 +23,12 @@ import {
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
-import { speakersAPI, venuesAPI } from "../../services/apiService";
+import {
+  eventsAPI,
+  speakersAPI,
+  tracksAPI,
+  venuesAPI,
+} from "../../services/apiService";
 
 const { RangePicker } = DatePicker;
 const { Title } = Typography;
@@ -39,17 +44,26 @@ const Dashboard = () => {
   const [speakers, setSpeakers] = useState([]);
   const [venues, setVenues] = useState([]);
   const [cityChoices, setCityChoices] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [tracks, setTracks] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch speakers data
+  // Fetch data based on selected menu
   useEffect(() => {
     if (selectedMenu === "speakers") {
       fetchSpeakers();
     } else if (selectedMenu === "venues") {
       fetchVenues();
       fetchCityChoices();
+    } else if (selectedMenu === "events") {
+      if (activeEventTab === "events") {
+        fetchEvents();
+      } else if (activeEventTab === "tracks") {
+        fetchEvents(); // Need events for tracks
+      }
     }
-  }, [selectedMenu]);
+  }, [selectedMenu, activeEventTab]);
 
   const fetchSpeakers = async () => {
     setLoading(true);
@@ -93,18 +107,50 @@ const Dashboard = () => {
     }
   };
 
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      const response = await eventsAPI.getAll();
+      setEvents(response.data);
+      // Set first event as default for tracks if available
+      if (response.data.length > 0 && !selectedEventId) {
+        setSelectedEventId(response.data[0].id);
+      }
+    } catch (error) {
+      message.error(
+        "Failed to fetch events: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTracks = async (eventId) => {
+    if (!eventId) return;
+
+    setLoading(true);
+    try {
+      const response = await tracksAPI.getAll(eventId);
+      setTracks(response.data);
+    } catch (error) {
+      message.error(
+        "Failed to fetch tracks: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch tracks when event is selected
+  useEffect(() => {
+    if (activeEventTab === "tracks" && selectedEventId) {
+      fetchTracks(selectedEventId);
+    }
+  }, [selectedEventId, activeEventTab]);
+
   // Mock data - replace with API calls
-  const events = [
-    {
-      id: 1,
-      title: "Tech Conference 2025",
-      description: "Annual technology conference",
-      startDate: "2025-11-15",
-      endDate: "2025-11-17",
-      venue: "Convention Center",
-      status: "upcoming",
-    },
-  ];
 
   const sessions = [
     {
@@ -116,16 +162,6 @@ const Dashboard = () => {
       endTime: "2025-11-15 10:30",
       trackId: 1,
       speaker: "John Doe",
-    },
-  ];
-
-  const tracks = [
-    {
-      id: 1,
-      eventId: 1,
-      name: "Main Track",
-      description: "Primary conference track",
-      color: "blue",
     },
   ];
 
@@ -160,6 +196,10 @@ const Dashboard = () => {
             await venuesAPI.delete(record.id);
             message.success("Venue deleted successfully");
             fetchVenues();
+          } else if (activeEventTab === "tracks" && selectedEventId) {
+            await tracksAPI.delete(selectedEventId, record.id);
+            message.success("Track deleted successfully");
+            fetchTracks(selectedEventId);
           } else {
             // Add API calls for other resources
             message.success("Item deleted successfully");
@@ -216,6 +256,22 @@ const Dashboard = () => {
         }
 
         fetchVenues();
+      } else if (activeEventTab === "tracks" && selectedEventId) {
+        // Handle track creation/update
+        const trackData = {
+          name: values.name,
+          description: values.description || "",
+        };
+
+        if (modalType === "create") {
+          await tracksAPI.create(selectedEventId, trackData);
+          message.success("Track created successfully");
+        } else {
+          await tracksAPI.update(selectedEventId, selectedRecord.id, trackData);
+          message.success("Track updated successfully");
+        }
+
+        fetchTracks(selectedEventId);
       } else {
         // Handle other resources
         console.log("Form values:", values);
@@ -328,7 +384,7 @@ const Dashboard = () => {
       key: "track",
       render: (trackId) => {
         const track = tracks.find((t) => t.id === trackId);
-        return track ? <Tag color={track.color}>{track.name}</Tag> : null;
+        return track ? track.name : "-";
       },
     },
     {
@@ -485,10 +541,13 @@ const Dashboard = () => {
       ellipsis: true,
     },
     {
-      title: "Color",
-      dataIndex: "color",
-      key: "color",
-      render: (color) => <Tag color={color}>{color}</Tag>,
+      title: "Event",
+      dataIndex: "event",
+      key: "event",
+      render: (eventId) => {
+        const event = events.find((e) => e.id === eventId);
+        return event ? event.title : "-";
+      },
     },
     {
       title: "Actions",
@@ -629,29 +688,13 @@ const Dashboard = () => {
                 { required: true, message: "Please enter the track name" },
               ]}
             >
-              <Input />
+              <Input placeholder="Main Track" />
             </Form.Item>
-            <Form.Item
-              name="description"
-              label="Description"
-              rules={[
-                { required: true, message: "Please enter a description" },
-              ]}
-            >
-              <Input.TextArea />
-            </Form.Item>
-            <Form.Item
-              name="color"
-              label="Color"
-              rules={[{ required: true, message: "Please select a color" }]}
-            >
-              <Select>
-                <Select.Option value="blue">Blue</Select.Option>
-                <Select.Option value="green">Green</Select.Option>
-                <Select.Option value="red">Red</Select.Option>
-                <Select.Option value="yellow">Yellow</Select.Option>
-                <Select.Option value="purple">Purple</Select.Option>
-              </Select>
+            <Form.Item name="description" label="Description">
+              <Input.TextArea
+                rows={3}
+                placeholder="Description of the track..."
+              />
             </Form.Item>
           </>
         );
@@ -803,13 +846,37 @@ const Dashboard = () => {
                     {menuItems.find((item) => item.key === selectedMenu)?.label}
                   </Title>
                 )}
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={handleCreate}
-                >
-                  Add New
-                </Button>
+                <Space>
+                  {activeEventTab === "tracks" && selectedMenu === "events" && (
+                    <Select
+                      style={{ width: 300 }}
+                      placeholder="Select an event"
+                      value={selectedEventId}
+                      onChange={setSelectedEventId}
+                      showSearch
+                      optionFilterProp="children"
+                      filterOption={(input, option) =>
+                        option.children
+                          .toLowerCase()
+                          .indexOf(input.toLowerCase()) >= 0
+                      }
+                    >
+                      {events.map((event) => (
+                        <Select.Option key={event.id} value={event.id}>
+                          {event.title}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  )}
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleCreate}
+                    disabled={activeEventTab === "tracks" && !selectedEventId}
+                  >
+                    Add New
+                  </Button>
+                </Space>
               </Space>
             </div>
 

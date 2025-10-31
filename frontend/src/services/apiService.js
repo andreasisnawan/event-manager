@@ -73,59 +73,56 @@ export const venuesAPI = {
 
 // Events API
 export const eventsAPI = {
-  getAll: () => apiClient.get("/events/"),
-  getById: (id) => apiClient.get(`/events/${id}/`),
+  getAll: () => apiClient.get("/events"),
+  getById: (id) => apiClient.get(`/events/${id}`),
   create: (data) => apiClient.post("/events/", data),
-  update: (id, data) => apiClient.put(`/events/${id}/`, data),
-  partialUpdate: (id, data) => apiClient.patch(`/events/${id}/`, data),
-  delete: (id) => apiClient.delete(`/events/${id}/`),
+  update: (id, data) => apiClient.put(`/events/${id}`, data),
+  partialUpdate: (id, data) => apiClient.patch(`/events/${id}`, data),
+  delete: (id) => apiClient.delete(`/events/${id}`),
 };
 
 // Sessions API
 export const sessionsAPI = {
-  getAll: (eventId) => apiClient.get(`/events/${eventId}/sessions/`),
+  getAll: (eventId) => apiClient.get(`/events/${eventId}/sessions`),
   getById: (eventId, sessionId) =>
-    apiClient.get(`/events/${eventId}/sessions/${sessionId}/`),
+    apiClient.get(`/events/${eventId}/sessions/${sessionId}`),
   create: (eventId, data) =>
-    apiClient.post(`/events/${eventId}/sessions/`, data),
+    apiClient.post(`/events/${eventId}/sessions`, data),
   update: (eventId, sessionId, data) =>
-    apiClient.put(`/events/${eventId}/sessions/${sessionId}/`, data),
+    apiClient.put(`/events/${eventId}/sessions/${sessionId}`, data),
   partialUpdate: (eventId, sessionId, data) =>
-    apiClient.patch(`/events/${eventId}/sessions/${sessionId}/`, data),
+    apiClient.patch(`/events/${eventId}/sessions/${sessionId}`, data),
   delete: (eventId, sessionId) =>
-    apiClient.delete(`/events/${eventId}/sessions/${sessionId}/`),
+    apiClient.delete(`/events/${eventId}/sessions/${sessionId}`),
 };
 
 // Tracks API
 export const tracksAPI = {
-  getAll: (eventId) => apiClient.get(`/events/${eventId}/tracks/`),
+  getAll: (eventId) => apiClient.get(`/events/${eventId}/tracks`),
   getById: (eventId, trackId) =>
-    apiClient.get(`/events/${eventId}/tracks/${trackId}/`),
-  create: (eventId, data) => apiClient.post(`/events/${eventId}/tracks/`, data),
+    apiClient.get(`/events/${eventId}/tracks/${trackId}`),
+  create: (eventId, data) => apiClient.post(`/events/${eventId}/tracks`, data),
   update: (eventId, trackId, data) =>
-    apiClient.put(`/events/${eventId}/tracks/${trackId}/`, data),
+    apiClient.put(`/events/${eventId}/tracks/${trackId}`, data),
   partialUpdate: (eventId, trackId, data) =>
-    apiClient.patch(`/events/${eventId}/tracks/${trackId}/`, data),
+    apiClient.patch(`/events/${eventId}/tracks/${trackId}`, data),
   delete: (eventId, trackId) =>
-    apiClient.delete(`/events/${eventId}/tracks/${trackId}/`),
+    apiClient.delete(`/events/${eventId}/tracks/${trackId}`),
 };
 
 // Registrations API
 export const registrationsAPI = {
-  getAll: (eventId) => apiClient.get(`/events/${eventId}/registrations/`),
+  getAll: (eventId) => apiClient.get(`/events/${eventId}/registrations`),
   getById: (eventId, registrationId) =>
-    apiClient.get(`/events/${eventId}/registrations/${registrationId}/`),
+    apiClient.get(`/events/${eventId}/registrations/${registrationId}`),
   create: (eventId, data) =>
-    apiClient.post(`/events/${eventId}/registrations/`, data),
+    apiClient.post(`/events/${eventId}/registrations`, data),
   update: (eventId, registrationId, data) =>
-    apiClient.put(`/events/${eventId}/registrations/${registrationId}/`, data),
+    apiClient.put(`/events/${eventId}/registrations/${registrationId}`, data),
   partialUpdate: (eventId, registrationId, data) =>
-    apiClient.patch(
-      `/events/${eventId}/registrations/${registrationId}/`,
-      data
-    ),
+    apiClient.patch(`/events/${eventId}/registrations/${registrationId}`, data),
   delete: (eventId, registrationId) =>
-    apiClient.delete(`/events/${eventId}/registrations/${registrationId}/`),
+    apiClient.delete(`/events/${eventId}/registrations/${registrationId}`),
 };
 
 export default apiClient;
