@@ -1,12 +1,13 @@
 import axios from "axios";
 import Cookies from "js-cookie";
+import env from "../utils/env.js";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const API_URL = env.api.url;
 
 // Cookie configuration for better security
 const cookieOptions = {
-  expires: 7, // 7 days
-  secure: process.env.NODE_ENV === "production", // Use secure in production
+  expires: env.auth.cookieExpireDays,
+  secure: env.isProd, // Use secure cookies in production
   sameSite: "strict",
   path: "/",
 };

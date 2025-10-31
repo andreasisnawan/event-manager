@@ -72,6 +72,12 @@ class VenueViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         return Venue.objects.all()
+    
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='city-choices')
+    def city_choices(self, request):
+        """Return available city choices for venue selection"""
+        choices = [{"value": choice[0], "label": choice[1]} for choice in Venue.CITY_CHOICES]
+        return Response(choices)
 
 class SessionViewSet(viewsets.ModelViewSet):
     serializer_class = SessionSerializer

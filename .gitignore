@@ -31,5 +31,3 @@ postgres_data/
 
 # Logs
 *.log
-
-node_modules/

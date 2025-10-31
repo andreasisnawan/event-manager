@@ -21,9 +21,9 @@ import {
   Table,
   Tag,
   Typography,
-  Upload,
 } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { speakersAPI, venuesAPI } from "../../services/apiService";
 
 const { RangePicker } = DatePicker;
 const { Title } = Typography;
@@ -36,30 +36,62 @@ const Dashboard = () => {
   const [modalType, setModalType] = useState("create");
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [form] = Form.useForm();
+  const [speakers, setSpeakers] = useState([]);
+  const [venues, setVenues] = useState([]);
+  const [cityChoices, setCityChoices] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Additional mock data for venues and speakers
-  const venues = [
-    {
-      id: 1,
-      name: "Convention Center",
-      address: "123 Main St",
-      city: "New York",
-      capacity: 1000,
-      facilities: ["Parking", "WiFi", "AV Equipment"],
-    },
-  ];
+  // Fetch speakers data
+  useEffect(() => {
+    if (selectedMenu === "speakers") {
+      fetchSpeakers();
+    } else if (selectedMenu === "venues") {
+      fetchVenues();
+      fetchCityChoices();
+    }
+  }, [selectedMenu]);
 
-  const speakers = [
-    {
-      id: 1,
-      name: "John Doe",
-      title: "Tech Lead",
-      company: "Tech Corp",
-      bio: "Experienced technology leader",
-      topics: ["AI", "Cloud Computing"],
-      image: "https://placehold.co/100x100",
-    },
-  ];
+  const fetchSpeakers = async () => {
+    setLoading(true);
+    try {
+      const response = await speakersAPI.getAll();
+      setSpeakers(response.data);
+    } catch (error) {
+      message.error(
+        "Failed to fetch speakers: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchVenues = async () => {
+    setLoading(true);
+    try {
+      const response = await venuesAPI.getAll();
+      setVenues(response.data);
+    } catch (error) {
+      message.error(
+        "Failed to fetch venues: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCityChoices = async () => {
+    try {
+      const response = await venuesAPI.getCityChoices();
+      setCityChoices(response.data);
+    } catch (error) {
+      message.error(
+        "Failed to fetch city choices: " +
+          (error.response?.data?.message || error.message)
+      );
+    }
+  };
 
   // Mock data - replace with API calls
   const events = [
@@ -118,23 +150,91 @@ const Dashboard = () => {
       okText: "Yes, Delete",
       okType: "danger",
       cancelText: "No, Cancel",
-      onOk() {
-        // Add API call to delete
-        message.success("Item deleted successfully");
+      onOk: async () => {
+        try {
+          if (selectedMenu === "speakers") {
+            await speakersAPI.delete(record.id);
+            message.success("Speaker deleted successfully");
+            fetchSpeakers();
+          } else if (selectedMenu === "venues") {
+            await venuesAPI.delete(record.id);
+            message.success("Venue deleted successfully");
+            fetchVenues();
+          } else {
+            // Add API calls for other resources
+            message.success("Item deleted successfully");
+          }
+        } catch (error) {
+          message.error(
+            "Failed to delete: " +
+              (error.response?.data?.message || error.message)
+          );
+        }
       },
     });
   };
 
-  const handleModalOk = () => {
-    form.validateFields().then((values) => {
-      // Add API call to create/edit
-      console.log("Form values:", values);
-      message.success(
-        `Item ${modalType === "create" ? "created" : "updated"} successfully`
-      );
+  const handleModalOk = async () => {
+    try {
+      const values = await form.validateFields();
+
+      if (selectedMenu === "speakers") {
+        // Handle speaker creation/update
+        const speakerData = {
+          name: values.name,
+          bio: values.bio || "",
+          avatar_url: values.avatar_url || "",
+          contact_email: values.contact_email || "",
+          metadata: values.metadata || {},
+        };
+
+        if (modalType === "create") {
+          await speakersAPI.create(speakerData);
+          message.success("Speaker created successfully");
+        } else {
+          await speakersAPI.update(selectedRecord.id, speakerData);
+          message.success("Speaker updated successfully");
+        }
+
+        fetchSpeakers();
+      } else if (selectedMenu === "venues") {
+        // Handle venue creation/update
+        const venueData = {
+          name: values.name,
+          address: values.address || "",
+          city: values.city || "",
+          capacity: values.capacity ? parseInt(values.capacity, 10) : null,
+          metadata: values.metadata || {},
+        };
+
+        if (modalType === "create") {
+          await venuesAPI.create(venueData);
+          message.success("Venue created successfully");
+        } else {
+          await venuesAPI.update(selectedRecord.id, venueData);
+          message.success("Venue updated successfully");
+        }
+
+        fetchVenues();
+      } else {
+        // Handle other resources
+        console.log("Form values:", values);
+        message.success(
+          `Item ${modalType === "create" ? "created" : "updated"} successfully`
+        );
+      }
+
       setModalVisible(false);
       form.resetFields();
-    });
+    } catch (error) {
+      if (error.errorFields) {
+        // Validation errors
+        return;
+      }
+      message.error(
+        "Operation failed: " + (error.response?.data?.message || error.message)
+      );
+    }
   };
 
   const eventsColumns = [
@@ -262,6 +362,7 @@ const Dashboard = () => {
       title: "Address",
       dataIndex: "address",
       key: "address",
+      ellipsis: true,
     },
     {
       title: "City",
@@ -272,7 +373,14 @@ const Dashboard = () => {
       title: "Capacity",
       dataIndex: "capacity",
       key: "capacity",
-      render: (capacity) => `${capacity.toLocaleString()} people`,
+      render: (capacity) =>
+        capacity ? `${capacity.toLocaleString()} people` : "-",
+    },
+    {
+      title: "Created",
+      dataIndex: "created_at",
+      key: "created_at",
+      render: (date) => (date ? new Date(date).toLocaleDateString() : "-"),
     },
     {
       title: "Actions",
@@ -302,43 +410,46 @@ const Dashboard = () => {
       key: "name",
       render: (_, record) => (
         <Space>
-          <img
-            src={record.image}
-            alt={record.name}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              objectFit: "cover",
-            }}
-          />
+          {record.avatar_url ? (
+            <img
+              src={record.avatar_url}
+              alt={record.name}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                backgroundColor: "#f0f0f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <UserOutlined />
+            </div>
+          )}
           {record.name}
         </Space>
       ),
     },
     {
-      title: "Title",
-      dataIndex: "title",
-      key: "title",
+      title: "Email",
+      dataIndex: "contact_email",
+      key: "contact_email",
     },
     {
-      title: "Company",
-      dataIndex: "company",
-      key: "company",
-    },
-    {
-      title: "Topics",
-      dataIndex: "topics",
-      key: "topics",
-      render: (topics) => (
-        <Space wrap>
-          {topics.map((topic) => (
-            <Tag key={topic} color="blue">
-              {topic}
-            </Tag>
-          ))}
-        </Space>
-      ),
+      title: "Bio",
+      dataIndex: "bio",
+      key: "bio",
+      ellipsis: true,
     },
     {
       title: "Actions",
@@ -554,41 +665,38 @@ const Dashboard = () => {
                 { required: true, message: "Please enter the venue name" },
               ]}
             >
-              <Input />
+              <Input placeholder="Convention Center" />
             </Form.Item>
-            <Form.Item
-              name="address"
-              label="Address"
-              rules={[{ required: true, message: "Please enter the address" }]}
-            >
-              <Input />
+            <Form.Item name="address" label="Address">
+              <Input.TextArea
+                rows={2}
+                placeholder="123 Main Street, Building A"
+              />
             </Form.Item>
-            <Form.Item
-              name="city"
-              label="City"
-              rules={[{ required: true, message: "Please enter the city" }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item
-              name="capacity"
-              label="Capacity"
-              rules={[{ required: true, message: "Please enter the capacity" }]}
-            >
-              <Input type="number" min={0} />
-            </Form.Item>
-            <Form.Item
-              name="facilities"
-              label="Facilities"
-              rules={[{ required: true, message: "Please select facilities" }]}
-            >
-              <Select mode="tags" placeholder="Add facilities">
-                <Select.Option value="Parking">Parking</Select.Option>
-                <Select.Option value="WiFi">WiFi</Select.Option>
-                <Select.Option value="AV Equipment">AV Equipment</Select.Option>
-                <Select.Option value="Catering">Catering</Select.Option>
-                <Select.Option value="Stage">Stage</Select.Option>
+            <Form.Item name="city" label="City">
+              <Select
+                placeholder="Select a city"
+                showSearch
+                optionFilterProp="children"
+                filterOption={(input, option) =>
+                  option.children.toLowerCase().indexOf(input.toLowerCase()) >=
+                  0
+                }
+                loading={cityChoices.length === 0}
+              >
+                {cityChoices.map((city) => (
+                  <Select.Option key={city.value} value={city.value}>
+                    {city.label}
+                  </Select.Option>
+                ))}
               </Select>
+            </Form.Item>
+            <Form.Item name="capacity" label="Capacity">
+              <Input
+                type="number"
+                min={0}
+                placeholder="Maximum number of attendees"
+              />
             </Form.Item>
           </>
         );
@@ -596,57 +704,33 @@ const Dashboard = () => {
         return (
           <>
             <Form.Item
-              name="image"
-              label="Profile Image"
-              rules={[{ required: true, message: "Please upload an image" }]}
-            >
-              <Upload
-                maxCount={1}
-                listType="picture-card"
-                beforeUpload={() => false}
-              >
-                <div>
-                  <PlusOutlined />
-                  <div style={{ marginTop: 8 }}>Upload</div>
-                </div>
-              </Upload>
-            </Form.Item>
-            <Form.Item
               name="name"
               label="Name"
               rules={[
                 { required: true, message: "Please enter the speaker name" },
               ]}
             >
-              <Input />
+              <Input placeholder="John Doe" />
             </Form.Item>
             <Form.Item
-              name="title"
-              label="Title"
-              rules={[{ required: true, message: "Please enter the title" }]}
+              name="contact_email"
+              label="Contact Email"
+              rules={[{ type: "email", message: "Please enter a valid email" }]}
             >
-              <Input />
+              <Input placeholder="john.doe@example.com" />
             </Form.Item>
             <Form.Item
-              name="company"
-              label="Company"
-              rules={[{ required: true, message: "Please enter the company" }]}
+              name="avatar_url"
+              label="Avatar URL"
+              rules={[{ type: "url", message: "Please enter a valid URL" }]}
             >
-              <Input />
+              <Input placeholder="https://example.com/avatar.jpg" />
             </Form.Item>
-            <Form.Item
-              name="bio"
-              label="Bio"
-              rules={[{ required: true, message: "Please enter a bio" }]}
-            >
-              <Input.TextArea rows={4} />
-            </Form.Item>
-            <Form.Item
-              name="topics"
-              label="Topics"
-              rules={[{ required: true, message: "Please add topics" }]}
-            >
-              <Select mode="tags" placeholder="Add topics" />
+            <Form.Item name="bio" label="Bio">
+              <Input.TextArea
+                rows={4}
+                placeholder="Brief biography of the speaker..."
+              />
             </Form.Item>
           </>
         );
@@ -688,7 +772,11 @@ const Dashboard = () => {
     },
   ];
 
-  const eventSegments = ["events", "sessions", "tracks"];
+  const eventSegments = [
+    { value: "events", label: "Events" },
+    { value: "sessions", label: "Sessions" },
+    { value: "tracks", label: "Tracks" },
+  ];
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -729,6 +817,7 @@ const Dashboard = () => {
               columns={columns}
               dataSource={data}
               rowKey="id"
+              loading={loading}
               pagination={{
                 pageSize: 10,
                 showSizeChanger: true,

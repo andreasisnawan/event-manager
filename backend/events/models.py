@@ -12,9 +12,39 @@ User = settings.AUTH_USER_MODEL
 
 
 class Venue(models.Model):
+    # Indonesian City Choices
+    CITY_CHOICES = [
+        ("Jakarta", "Jakarta"),
+        ("Surabaya", "Surabaya"),
+        ("Bandung", "Bandung"),
+        ("Medan", "Medan"),
+        ("Semarang", "Semarang"),
+        ("Makassar", "Makassar"),
+        ("Palembang", "Palembang"),
+        ("Tangerang", "Tangerang"),
+        ("Depok", "Depok"),
+        ("Bekasi", "Bekasi"),
+        ("Bogor", "Bogor"),
+        ("Batam", "Batam"),
+        ("Pekanbaru", "Pekanbaru"),
+        ("Bandar Lampung", "Bandar Lampung"),
+        ("Padang", "Padang"),
+        ("Malang", "Malang"),
+        ("Denpasar", "Denpasar"),
+        ("Samarinda", "Samarinda"),
+        ("Banjarmasin", "Banjarmasin"),
+        ("Pontianak", "Pontianak"),
+        ("Balikpapan", "Balikpapan"),
+        ("Jambi", "Jambi"),
+        ("Yogyakarta", "Yogyakarta"),
+        ("Manado", "Manado"),
+        ("Cirebon", "Cirebon"),
+    ]
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=128)
     address = models.TextField(blank=True)
+    city = models.CharField(max_length=128, blank=True, choices=CITY_CHOICES)
     capacity = models.PositiveIntegerField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
 
