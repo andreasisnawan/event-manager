@@ -89,10 +89,8 @@ const Home = () => {
       </Carousel>
 
       {/* Recommended Events */}
-      <div
-        style={{ padding: "0 24px", maxWidth: "100%", boxSizing: "border-box" }}
-      >
-        <Title level={2} style={{ marginBottom: 24 }}>
+      <div className="mb-10 px-6">
+        <Title level={2} className="mb-12">
           Recommended Events
         </Title>
 

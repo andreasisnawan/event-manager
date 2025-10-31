@@ -53,13 +53,9 @@ const MainLayout = () => {
     <Layout className="min-h-screen! w-screen">
       <Header
         style={{
-          padding: "0 24px",
           background: "#fff",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
         }}
+        className="align-middle flex justify-between bg-white px-6 shadow-md"
       >
         <Space align="center" size={24}>
           <Title level={4} style={{ margin: 0 }}>
@@ -82,7 +78,7 @@ const MainLayout = () => {
           </Button>
         </Space>
       </Header>
-      <Content className="pb-10">
+      <Content>
         <Outlet />
       </Content>
     </Layout>

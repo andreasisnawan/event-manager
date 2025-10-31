@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from authentication.models import User
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -106,13 +106,13 @@ class SessionViewSet(viewsets.ModelViewSet):
         serializer.save(event=event)
 
 class RegistrationViewSet(viewsets.ModelViewSet):
-    queryset = Registration.objects.select_related("attendee")
+    """ViewSet for managing registrations within an event context"""
     serializer_class = RegistrationSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
         event_id = self.kwargs.get('event_pk')
-        qs = Registration.objects.filter(event_id=event_id)
+        qs = Registration.objects.select_related("attendee", "event", "event__venue").filter(event_id=event_id)
         
         # organizers/admins can see all, others only their own
         user = self.request.user
@@ -125,6 +125,34 @@ class RegistrationViewSet(viewsets.ModelViewSet):
             return Registration.objects.none()
 
     def perform_destroy(self, instance):
+        # treat destroy as cancel: decrement with locks
+        from django.db import transaction
+        with transaction.atomic():
+            ev = Event.objects.select_for_update().get(pk=instance.event.pk)
+            if instance.status != 'cancelled':
+                instance.status = 'cancelled'
+                instance.canceled_at = datetime.now(timezone.utc)
+                instance.save()
+                ev.registered_count = max(ev.registered_count - 1, 0)
+                ev.save(update_fields=['registered_count'])
+
+
+class MyRegistrationViewSet(mixins.ListModelMixin,
+                            mixins.RetrieveModelMixin,
+                            mixins.DestroyModelMixin,
+                            viewsets.GenericViewSet):
+    """ViewSet for viewing and cancelling user's own registrations"""
+    serializer_class = RegistrationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Return only the current user's registrations"""
+        return Registration.objects.select_related(
+            "attendee", "event", "event__venue"
+        ).filter(attendee=self.request.user)
+
+    def perform_destroy(self, instance):
+        """Allow users to cancel their own registrations"""
         # treat destroy as cancel: decrement with locks
         from django.db import transaction
         with transaction.atomic():

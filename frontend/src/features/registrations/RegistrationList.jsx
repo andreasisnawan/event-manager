@@ -13,51 +13,46 @@ import {
   Row,
   Select,
   Space,
+  Spin,
   Tag,
   Typography,
+  message,
 } from "antd";
-import { useState } from "react";
+import dayjs from "dayjs";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { registrationsAPI } from "../../services/apiService";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const RegistrationList = () => {
   const navigate = useNavigate();
+  const [registrations, setRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedRegistration, setSelectedRegistration] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
-  // Mock data - replace with actual API call
-  const registrations = [
-    {
-      id: 1,
-      eventTitle: "Tech Conference 2025",
-      eventDate: "2025-11-15",
-      registrationDate: "2025-10-15",
-      status: "confirmed",
-      ticketType: "Regular",
-      price: 299,
-    },
-    {
-      id: 2,
-      eventTitle: "Music Festival",
-      eventDate: "2025-12-01",
-      registrationDate: "2025-10-20",
-      status: "pending",
-      ticketType: "VIP",
-      price: 150,
-    },
-    {
-      id: 3,
-      eventTitle: "Art Exhibition",
-      eventDate: "2025-11-05",
-      registrationDate: "2025-10-01",
-      status: "cancelled",
-      ticketType: "Regular",
-      price: 25,
-    },
-  ];
+  useEffect(() => {
+    fetchRegistrations();
+  }, []);
+
+  const fetchRegistrations = async () => {
+    setLoading(true);
+    try {
+      const response = await registrationsAPI.getMyRegistrations();
+      setRegistrations(response.data);
+    } catch (error) {
+      message.error(
+        "Failed to fetch registrations: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -77,20 +72,40 @@ const RegistrationList = () => {
     setShowCancelModal(true);
   };
 
-  const confirmCancel = () => {
-    // Add API call to cancel registration
-    console.log("Cancelling registration:", selectedRegistration.id);
-    setShowCancelModal(false);
-    setSelectedRegistration(null);
+  const confirmCancel = async () => {
+    setCancelling(true);
+    try {
+      await registrationsAPI.cancel(selectedRegistration.id);
+      message.success("Registration cancelled successfully");
+      setShowCancelModal(false);
+      setSelectedRegistration(null);
+      // Refresh the list
+      fetchRegistrations();
+    } catch (error) {
+      message.error(
+        "Failed to cancel registration: " +
+          (error.response?.data?.message || error.message)
+      );
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const filteredData = registrations.filter((reg) => {
-    const matchesSearch = reg.eventTitle
+    const matchesSearch = reg.event_details?.title
       .toLowerCase()
       .includes(searchText.toLowerCase());
     const matchesStatus = statusFilter === "all" || reg.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: "center", padding: "100px 0" }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -130,22 +145,29 @@ const RegistrationList = () => {
                   <Card
                     hoverable
                     style={{ height: "100%" }}
+                    onClick={() =>
+                      navigate(`/events/${registration.event_details?.id}`)
+                    }
                     actions={[
                       <Button
                         type="link"
                         key="view"
-                        onClick={() =>
-                          navigate(`/registrations/${registration.id}`)
-                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/events/${registration.event_details?.id}`);
+                        }}
                       >
-                        View Details
+                        View Event
                       </Button>,
                       registration.status !== "cancelled" && (
                         <Button
                           type="link"
                           danger
                           key="cancel"
-                          onClick={() => handleCancel(registration)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancel(registration);
+                          }}
                         >
                           Cancel Registration
                         </Button>
@@ -159,7 +181,7 @@ const RegistrationList = () => {
                     >
                       <div>
                         <Title level={5} style={{ margin: 0 }}>
-                          {registration.eventTitle}
+                          {registration.event_details?.title || "Unknown Event"}
                         </Title>
                         <Tag
                           color={getStatusColor(registration.status)}
@@ -171,14 +193,35 @@ const RegistrationList = () => {
                       </div>
 
                       <Space direction="vertical" size="small">
-                        <Space>
+                        <Text>
                           <CalendarOutlined /> Event Date:{" "}
-                          {registration.eventDate}
-                        </Space>
-                        <Space>
-                          <ClockCircleOutlined /> Registered:{" "}
-                          {registration.registrationDate}
-                        </Space>
+                          {registration.event_details?.start_time
+                            ? dayjs(
+                                registration.event_details.start_time
+                              ).format("MMM D, YYYY")
+                            : "TBA"}
+                        </Text>
+                        <Text>
+                          <ClockCircleOutlined />{" "}
+                          {registration.status === "cancelled"
+                            ? "Cancelled On: "
+                            : "Registered: "}
+                          {dayjs(
+                            registration.status === "cancelled"
+                              ? registration.cancelled_at
+                              : registration.created_at
+                          ).format("MMM D, YYYY")}
+                        </Text>
+                        <Text type="secondary">
+                          📍{" "}
+                          {registration.event_details?.venue_details?.name ||
+                            "TBA"}
+                        </Text>
+                        <Text type="secondary">
+                          🏙️{" "}
+                          {registration.event_details?.venue_details?.city ||
+                            "TBA"}
+                        </Text>
                       </Space>
                     </Space>
                   </Card>
@@ -201,10 +244,11 @@ const RegistrationList = () => {
         onCancel={() => setShowCancelModal(false)}
         okText="Yes, Cancel Registration"
         cancelText="No, Keep Registration"
+        confirmLoading={cancelling}
       >
         <p>
           Are you sure you want to cancel your registration for "
-          {selectedRegistration?.eventTitle}"?
+          {selectedRegistration?.event_details?.title}"?
         </p>
         <p>This action cannot be undone.</p>
       </Modal>

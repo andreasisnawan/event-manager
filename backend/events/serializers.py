@@ -101,14 +101,29 @@ class VenueSerializer(serializers.ModelSerializer):
 
 class RegistrationSerializer(serializers.ModelSerializer):
     attendee_name = serializers.CharField(source="attendee.get_full_name", read_only=True)
+    event_details = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = Registration
-        fields = ('id', 'event', 'attendee', 'attendee_name', 'status', 'canceled_at', 'created_at', 'metadata')
+        fields = ('id', 'event', 'event_details', 'attendee', 'attendee_name', 'status', 'canceled_at', 'created_at', 'metadata')
         read_only_fields = ('id', 'created_at', 'canceled_at', 'event', 'attendee')
         extra_kwargs = {
             "attendee": {"required": False}  # attendee not required for normal users
         }
+    
+    def get_event_details(self, obj):
+        if obj.event:
+            return {
+                'id': obj.event.id,
+                'title': obj.event.title,
+                'description': obj.event.description,
+                'start_time': obj.event.start_time,
+                'end_time': obj.event.end_time,
+                'venue_details': VenueSerializer(obj.event.venue).data if obj.event.venue else None,
+                'capacity': obj.event.capacity,
+                'registered_count': obj.event.registered_count,
+            }
+        return None
 
     def create(self, validated_data):
         request = self.context['request']

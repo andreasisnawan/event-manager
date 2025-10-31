@@ -113,6 +113,9 @@ export const tracksAPI = {
 
 // Registrations API
 export const registrationsAPI = {
+  // User's own registrations (top-level)
+  getMyRegistrations: () => apiClient.get("/my-registrations"),
+  // Event-specific registrations (nested)
   getAll: (eventId) => apiClient.get(`/events/${eventId}/registrations`),
   getById: (eventId, registrationId) =>
     apiClient.get(`/events/${eventId}/registrations/${registrationId}`),
@@ -124,6 +127,9 @@ export const registrationsAPI = {
     apiClient.patch(`/events/${eventId}/registrations/${registrationId}`, data),
   delete: (eventId, registrationId) =>
     apiClient.delete(`/events/${eventId}/registrations/${registrationId}`),
+  // Cancel registration (uses my-registrations endpoint)
+  cancel: (registrationId) =>
+    apiClient.delete(`/my-registrations/${registrationId}`),
 };
 
 export default apiClient;

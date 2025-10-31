@@ -8,6 +8,7 @@ import MainLayout from "./layouts/MainLayout";
 import Login from "./features/auth/Login";
 import Register from "./features/auth/Register";
 import Dashboard from "./features/dashboard/Dashboard";
+import EventDetails from "./features/events/EventDetails";
 import Explore from "./features/explore/Explore";
 import Home from "./features/home/Home";
 import RegistrationList from "./features/registrations/RegistrationList";
@@ -33,6 +34,7 @@ function App() {
           <Route element={<MainLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
+            <Route path="/events/:id" element={<EventDetails />} />
 
             <Route path="/registrations" element={<RegistrationList />} />
             <Route path="/manage-events" element={<Dashboard />} />
